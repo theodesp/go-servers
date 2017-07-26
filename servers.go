@@ -9,23 +9,27 @@ import (
 	"time"
 )
 
-// Base server type.
-type Server struct {
-	*http.Server
-}
-
 // A server with a connection limit
 type ConnectionLimitServer struct {
-	*Server
+	server *http.Server
 
 	// Limit the number of outstanding requests
 	ListenLimit int
 }
 
+func (srv *ConnectionLimitServer) newTCPListener(addr string) (net.Listener, error) {
+	conn, err := net.Listen("tcp", addr)
+	if err != nil {
+		return conn, err
+	}
+
+	return conn, nil
+}
+
 // ListenAndServe is equivalent to http.Server.ListenAndServe
 func (srv *ConnectionLimitServer) ListenAndServe() error {
 	// Create the listener so we can control the connections coming.
-	addr := srv.Server.Addr
+	addr := srv.server.Addr
 	if addr == "" {
 		addr = ":http"
 	}
@@ -48,23 +52,14 @@ func (srv *ConnectionLimitServer) Serve(listener net.Listener) error {
 
 	// Serve with graceful listener.
 	// Execution blocks here until listener.Close() is called, above.
-	err := srv.Server.Serve(listener)
+	err := srv.server.Serve(listener)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Graceful Shutdown
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-	srv.Server.Shutdown(ctx)
+	srv.server.Shutdown(ctx)
 
 	return err
-}
-
-func (srv *Server) newTCPListener(addr string) (net.Listener, error) {
-	conn, err := net.Listen("tcp", addr)
-	if err != nil {
-		return conn, err
-	}
-
-	return conn, nil
 }
